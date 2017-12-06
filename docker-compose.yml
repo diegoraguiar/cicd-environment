@@ -1,0 +1,103 @@
+version: "3.1"
+
+services:
+  nexus:
+    image: sonatype/nexus3
+    ports: 
+      - "8081:8081"
+    volumes: 
+      - nexus_data:/nexus-data
+    networks: 
+      - cicd_network
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  jenkins:
+    image: jenkinsci/blueocean
+    ports:
+      - "8080:8080"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - jenkins-docker:/var/run/docker.sock
+    networks: 
+      - cicd_network
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  sonar:
+    image: sonarqube:alpine
+    ports:
+      - "9000:9000"   
+    environment: 
+      SONARQUBE_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+    volumes:
+      - sonar_conf:/opt/sonarqube/conf
+      - sonar_data:/opt/sonarqube/data
+      - sonar_extensions:/opt/sonarqube/extensions
+      - sonar_bundled-plugins:/opt/sonarqube/lib/bundled-plugins
+    networks: 
+      - cicd_network
+      - sonar_network
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure      
+
+  sonar-db:
+    image: postgres:alpine
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+    volumes:
+      - sonar_psql:/var/lib/postgresql
+      - sonar_psql_data:/var/lib/postgresql/data
+    networks: 
+      - sonar_network
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  visualizer:
+    image: dockersamples/visualizer
+    ports:
+      - "7000:8080"
+    stop_grace_period: 1m30s
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager   
+
+volumes:
+  nexus_data:
+  jenkins-data:
+  jenkins-docker:
+  sonar_conf:
+  sonar_data:
+  sonar_extensions:
+  sonar_bundled-plugins:
+  sonar_psql:
+  sonar_psql_data:
+
+networks: 
+  cicd_network:
+  sonar_network:
